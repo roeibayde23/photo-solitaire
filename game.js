@@ -4,8 +4,30 @@ const $=id=>document.getElementById(id);
 let S,hist,moves,secs,tick,started;
 let photos={};const urls=[];
 const ORDER=(()=>{const o=[];for(const r of [13,12,11,1,10,9,8,7,6,5,4,3,2])for(let s=0;s<4;s++)o.push(s+'-'+r);return o})();
+
+function applyTheme(){
+  const b=document.body;
+  if(!urls.length){b.classList.remove('themed');return}
+  b.classList.add('themed');
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=()=>{
+    try{
+      const c=document.createElement('canvas');c.width=32;c.height=32;
+      const x=c.getContext('2d');x.drawImage(img,0,0,32,32);
+      const d=x.getImageData(0,0,32,32).data;let r=0,g=0,bl=0,n=0;
+      for(let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];bl+=d[i+2];n++}
+      r=r/n|0;g=g/n|0;bl=bl/n|0;
+      document.documentElement.style.setProperty('--theme-rgb',r+','+g+','+bl);
+      document.documentElement.style.setProperty('--theme-mid','rgb('+Math.max(40,r*.45)+','+Math.max(60,g*.55)+','+Math.max(40,bl*.4)+')');
+      document.documentElement.style.setProperty('--theme-dark','rgb('+Math.max(20,r*.25)+','+Math.max(35,g*.35)+','+Math.max(20,bl*.22)+')');
+    }catch(e){}
+  };
+  img.src=urls[0];
+}
+
 function mapPhotos(){photos={};urls.slice(0,52).forEach((u,i)=>photos[ORDER[i]]=u);
-  $('clear-photos').classList.toggle('hidden',!urls.length);}
+  $('clear-photos').classList.toggle('hidden',!urls.length);applyTheme();}
 const red=c=>c.s===1||c.s===2;
 function newGame(){
   const d=[];for(let s=0;s<4;s++)for(let r=1;r<=13;r++)d.push({s,r,up:false});
