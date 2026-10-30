@@ -75,7 +75,11 @@ function cardEl(c,from,idx){
   const ph=c.up&&photos[c.s+'-'+c.r];if(ph){e.classList.add('photo');e.style.backgroundImage=`url("${ph}")`}
   e.dataset.from=from;e.dataset.idx=idx;return e;
 }
+function clearGhosts(){
+  document.querySelectorAll('body > .card').forEach(e=>e.remove());
+}
 function render(){
+  clearGhosts();
   const st=$('stock');st.querySelectorAll('.card').forEach(e=>e.remove());
   if(S.stock.length)st.appendChild(cardEl(S.stock[S.stock.length-1],'stock',S.stock.length-1));
   $('stock-count').textContent=S.stock.length||'↻';
@@ -84,9 +88,17 @@ function render(){
   S.f.forEach((p,i)=>{const e=document.createElement('div');e.className='pile foundation';e.dataset.suit=SUITS[i];e.dataset.drop='f:'+i;
     if(p.length)e.appendChild(cardEl(p[p.length-1],'f:'+i,p.length-1));f.appendChild(e)});
   const t=$('tableau');t.innerHTML='';
-  S.t.forEach((p,i)=>{const col=document.createElement('div');col.className='col';col.dataset.drop='t:'+i;let y=0;
-    p.forEach((c,k)=>{const e=cardEl(c,'t:'+i,k);e.style.top=`calc(${y})`;y+=`${k?' + ':''}var(${c.up?'--fan':'--fan-down'})`;
-      if(!k)y='var('+(c.up?'--fan':'--fan-down')+')';col.appendChild(e)});t.appendChild(col)});
+  S.t.forEach((p,i)=>{
+    const col=document.createElement('div');col.className='col';col.dataset.drop='t:'+i;
+    let parts=[];
+    p.forEach((c,k)=>{
+      const e=cardEl(c,'t:'+i,k);
+      if(k===0){e.style.top='0px';parts=['0px']}
+      else{parts.push(`var(${p[k-1].up?'--fan':'--fan-down'})`);e.style.top=`calc(${parts.join(' + ')})`}
+      col.appendChild(e);
+    });
+    t.appendChild(col);
+  });
   $('moves').textContent=moves;$('timer').textContent=fmt(secs);
 }
 // pointer drag
@@ -97,23 +109,28 @@ document.addEventListener('pointerdown',e=>{
   if(!el||el.classList.contains('down'))return;
   const from=el.dataset.from,idx=+el.dataset.idx;if(from==='stock')return;
   const els=from[0]==='t'?[...el.parentNode.children].filter(c=>+c.dataset.idx>=idx):[el];
-  drag={from,idx,els,x:e.clientX,y:e.clientY,moved:false,orig:els.map(c=>c.getBoundingClientRect())};
+  drag={from,idx,els,x:e.clientX,y:e.clientY,moved:false,orig:els.map(c=>c.getBoundingClientRect()),pid:e.pointerId};
+  try{el.setPointerCapture(e.pointerId)}catch(_){}
 });
 document.addEventListener('pointermove',e=>{
   if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
   if(!drag.moved&&Math.hypot(dx,dy)<6)return;
   if(!drag.moved){drag.moved=true;drag.els.forEach((c,i)=>{const r=drag.orig[i];c.classList.add('drag');
-    Object.assign(c.style,{position:'fixed',left:r.left+'px',top:r.top+'px'});document.body.appendChild(c)})}
-  drag.els.forEach((c,i)=>{const r=drag.orig[i];c.style.left=r.left+dx+'px';c.style.top=r.top+dy+'px'});
+    Object.assign(c.style,{position:'fixed',left:r.left+'px',top:r.top+'px',margin:0,zIndex:2000+i});document.body.appendChild(c)})}
+  drag.els.forEach((c,i)=>{const r=drag.orig[i];c.style.left=(r.left+dx)+'px';c.style.top=(r.top+dy)+'px'});
 });
-document.addEventListener('pointerup',e=>{
+function endDrag(e){
   if(!drag)return;const d=drag;drag=null;
-  if(!d.moved){autoMove(d.from,d.idx);return}
+  if(!d.moved){autoMove(d.from,d.idx)||render();return}
+  // Always clear floating cards first, then apply move or redraw
+  clearGhosts();
   const hit=document.elementsFromPoint(e.clientX,e.clientY).map(x=>x.closest('[data-drop]')).find(Boolean);
   const to=hit&&hit.dataset.drop,card=pile(d.from)[d.idx];
-  if(to&&to!==d.from&&canPlace(card,to,d.els.length))move(d.from,d.idx,to);else render();
-});
-$('undo').onclick=()=>{if(!hist.length)return;const[s,m]=JSON.parse(hist.pop());S=s;moves=m;render()};
+  if(card&&to&&to!==d.from&&canPlace(card,to,d.els.length))move(d.from,d.idx,to);else render();
+}
+document.addEventListener('pointerup',endDrag);
+document.addEventListener('pointercancel',endDrag);
+$('undo').onclick=()=>{if(!hist.length)return;const[s,m]=JSON.parse(hist.pop());S=s;moves=m;clearGhosts();render()};
 $('add-photos').onclick=()=>$('photo-input').click();
 $('photo-input').onchange=e=>{for(const f of e.target.files)if(f.type.startsWith('image/'))urls.push(URL.createObjectURL(f));e.target.value='';mapPhotos();render()};
 $('clear-photos').onclick=()=>{urls.forEach(u=>URL.revokeObjectURL(u));urls.length=0;mapPhotos();render()};
